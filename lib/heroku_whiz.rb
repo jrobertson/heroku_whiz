@@ -3,11 +3,11 @@
 # file: heroku_whiz.rb
 
 # created: 8th March 2022
-# description: Handy (experimental) Heroku gem for noobs to create a 
+# description: Handy (experimental) Heroku gem for noobs to create a
 #              simple Heroku app in a whiz!
 
-# note: If this gem becomes outdated because of a change in the Heroku app 
-#       setup process, please inform the owner of this project via *Issues* 
+# note: If this gem becomes outdated because of a change in the Heroku app
+#       setup process, please inform the owner of this project via *Issues*
 #       on GitHub (https://github.com/jrobertson/heroku_whiz).
 
 
@@ -24,7 +24,7 @@ require 'clipboard'
 # Example usage:
 #
 # hw = HerokuWhiz.new dir: '/home/james/heroku', template: 'rack', appname: 'hello2', debug: true
-# 
+#
 # hw.wipe_clean    # removes the previous local app file directory
 # hw.create        # creates the local app file directory
 # #hw.local_run    # runs the web app locally
@@ -35,14 +35,14 @@ require 'clipboard'
 
 class HerokuWhiz
 
-  def initialize(dir: '.', template: 'rack', appname: 'myapp', 
+  def initialize(dir: '.', template: 'rack', appname: 'myapp',
         verbose: true, debug: false)
 
     @dir, @template, @appname, @verbose = dir, template, appname, verbose
 
     @app_path = File.join(@dir, @appname)
 
-    
+
   end
 
   def app_url()
@@ -110,10 +110,10 @@ class HerokuWhiz
 
     #`heroku create #{@appname}`
 
-    # the above statement was commented out because there's a 
+    # the above statement was commented out because there's a
     # high probability the appname you have chosen has already been taken
     #  e.g. hello2 => hello2.herokuapp.com
-    
+
     `heroku create`
     sleep 2
 
@@ -135,7 +135,7 @@ class HerokuWhiz
     sleep 1
 
     Process.kill('QUIT', r.pid)
- 
+
 
     puts 'SUCCESS! Ready to deploy' if s == "Hello World!\n"
 
@@ -151,9 +151,9 @@ class HerokuWhiz
     # write the config.ru file
     #
     config = %q(
-run lambda do |env|
+run lambda {|env|
   [200, {'Content-Type'=>'text/plain'}, StringIO.new("Hello World!\n")]
-end)
+})
     File.write File.join(@app_path, 'config.ru'), config
 
     # write the Gemfile
