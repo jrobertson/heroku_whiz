@@ -8,6 +8,26 @@
 # description: Handy (experimental) Heroku gem for noobs to create a
 #              simple Heroku app in a whiz!
 
+# Q: Why Heroku?
+#
+# A: With a quick Twitter search for Free wen hosting, a
+#    popular Tweet mentioned Heroku
+#
+# 10 FREE Hosting/Clouds for Your website:
+#
+# ➡️ GitHub Pages
+# ➡️ Heroku
+# ➡️ Amazon Web Services (AWS)
+# ➡️ Vercel
+# ➡️ Firebase Hosting
+# ➡️ Awardspace
+# ➡️ Netlify
+# ➡️ Google Cloud
+# ➡️ Cloudflare
+# ➡️ Weebly
+#
+
+
 # note: If this gem becomes outdated because of a change in the Heroku app
 #       setup process, please inform the owner of this project via *Issues*
 #       on GitHub (https://github.com/jrobertson/heroku_whiz).
@@ -39,13 +59,13 @@ require 'launchy'
 
 class WhizBase
 
-  def initialize(app_path, debug: false)
+  def initialize(app_path, verbose: true, debug: false)
 
-    @app_path, debug = app_path, debug
+    @app_path, @verbose, debug = app_path, verbose, debug
 
   end
 
-  def create()
+  def create(add: nil)
 
     config = %q(
 run lambda {|env|
@@ -81,13 +101,19 @@ gem 'puma'
 
     end
 
+    appname = heroku_app()
+
+    if setup == :both then
+
+      Clipboard.copy appname
+      puts 'App name ' + appname + ' copied to clipboard'
+      `heroku apps:destroy #{appname}`
+
+    end
+
     rm_rf File.join(@app_path, '.git')
     rmdir File.join(@app_path, '.git')
     rmdir @app_path
-
-    return unless setup == :both
-
-    `heroku apps:destroy --confirm #{heroku_app()}`
 
   end
 
@@ -108,10 +134,13 @@ gem 'puma'
     # high probability the appname you have chosen has already been taken
     #  e.g. hello2 => hello2.herokuapp.com
 
+    puts  'Running *heroku create*' if @verbose
     `heroku create`
-    sleep 2
+    sleep 3
 
+    puts  'Running *git push heroku master*' if @verbose
     r = `git push heroku master`
+    sleep 10
 
   end
 
@@ -166,7 +195,8 @@ gem 'puma'
   end
 
   def heroku_app()
-    `heroku config`.lines.first.split[1]
+    s = `heroku config`
+    s.lines.first.split[1] if s
   end
 
   def rm(file)
@@ -183,38 +213,85 @@ gem 'puma'
 
 end
 
+class SinatraWhizError < Exception
+end
+
 class SinatraWhiz < WhizBase
 
-  def initialize(app_path, debug: false)
-    super(app_path, debug: debug)
+  def initialize(app_path, verbose: true, debug: false)
+    super(app_path, verbose: verbose, debug: debug)
   end
 
-  def create()
+  def create(add: nil)
 
-    config = %q(
+    if add then
+
+      FileUtils.mkdir_p @app_path
+      FileUtils.chdir @app_path
+
+      # copying the files into file directory @app_path
+      # ensure the files config.ru, Gemfile, and Procfile exist
+      #
+      a = Dir.glob(File.join(add,'*'))
+      files = a.map {|x| File.basename(x)}
+
+      expected = %w(config.ru Gemfile Procfile)
+      found = (files & expected)
+
+      if found.length < 3 then
+        raise SinatraWhizError, 'missing ' + (expected - found).join(', ')
+      end
+
+      puts 'copying files ' + a.inspect if @debug
+
+      a.each {|x| FileUtils.cp x, @app_path }
+
+    else
+
+      config = %q(
 require './hello'
 run Sinatra::Application
 )
-
-    gemfile = %q(
+      gemfile = %q(
 source 'https://rubygems.org'
 gem 'sinatra'
 gem 'puma'
 )
 
-    procfile = 'web: bundle exec rackup config.ru -p $PORT'
+      procfile = 'web: bundle exec rackup config.ru -p $PORT'
+      create_basefiles(config, gemfile, procfile)
 
-    create_basefiles(config, gemfile, procfile)
-
-    hello_rb = %q(
+      hello_rb = %q(
 require 'sinatra'
 
 get '/' do
   "Hello World!"
 end
 )
-    File.write File.join(@app_path, 'hello.rb'), hello_rb
-    sleep 0.3
+      File.write File.join(@app_path, 'hello.rb'), hello_rb
+      sleep 0.3
+
+    end
+
+  end
+
+  def local_testrun()
+    r = IO.popen("bundle exec rackup -p 9292 config.ru")
+    puts 'r: ' + r.inspect if @debug
+    sleep 2
+
+    s = URI.open('http://127.0.0.1:9292').read
+    sleep 1
+
+    Process.kill('QUIT', r.pid)
+
+    puts 'SUCCESS! Ready to deploy' if s == "Hello World!"
+  end
+
+  def wipe_clean(setup=nil)
+
+    rm File.join(@app_path, 'hello.rb')
+    super(setup)
 
   end
 
@@ -222,18 +299,19 @@ end
 
 class HerokuWhiz
 
-  def initialize(dir: '.', template: 'rack', appname: 'myapp',
+  def initialize(dir: '.', template: 'rack', appname: File.basename(Dir.pwd),
         verbose: true, debug: false)
 
     @dir, @template, @appname, @verbose = dir, template, appname, verbose
 
     @app_path = File.join(@dir, @appname)
+    FileUtils.chdir @app_path if File.exists? @app_path
 
     case @template.to_sym
     when :rack
-      @tapp = WhizBase.new @app_path, debug: debug
+      @tapp = WhizBase.new @app_path, verbose: verbose, debug: debug
     when :sinatra
-      @tapp = SinatraWhiz.new @app_path, debug: debug
+      @tapp = SinatraWhiz.new @app_path, verbose: verbose, debug: debug
     end
 
   end
@@ -253,11 +331,11 @@ class HerokuWhiz
     `heroku open`
   end
 
-  def create()
+  def create(add: nil)
 
     return unless @tapp
 
-    @tapp.create
+    @tapp.create add: add
 
     # build
     `bundle install`
@@ -282,7 +360,7 @@ class HerokuWhiz
 
     return unless @tapp
 
-    @tapp.wipe_clean
+    @tapp.wipe_clean setup
 
   end
 
@@ -313,7 +391,8 @@ class HerokuWhiz
   private
 
   def heroku_app()
-    `heroku config`.lines.first.split[1]
+    s = `heroku config`
+    s.lines.first.split[1] if s
   end
 
 end
